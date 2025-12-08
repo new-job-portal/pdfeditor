@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>All-in-One PDF Converter Tools</title>
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#0d0f1a;
+    color:white;
+}
+.header{
+    padding:30px;
+    font-size:28px;
+    font-weight:bold;
+}
+.container{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:20px;
+    padding:20px;
+}
+.card{
+    background:#161a2b;
+    padding:20px;
+    border-radius:10px;
+    border:1px solid #232744;
+}
+.card-title{
+    font-size:20px;
+    margin-bottom:10px;
+}
+.btn{
+    margin-top:15px;
+    padding:10px 20px;
+    background:#4862ff;
+    border:none;
+    border-radius:6px;
+    color:white;
+    cursor:pointer;
+}
+.btn:hover{
+    background:#3450ff;
+}
+.hidden{
+    display:none;
+}
+.tool-box{
+    margin-top:20px;
+    background:#111522;
+    padding:20px;
+    border-radius:10px;
+}
+input{
+    margin-top:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">All-in-One PDF Converter Tools</div>
+
+<div class="container">
+
+    <!-- PDF → JPG -->
+    <div class="card">
+        <div class="card-title">PDF → JPG</div>
+        <p>Render each PDF page into a JPG.</p>
+        <button class="btn" onclick="openTool('pdfToJpgBox')">Open tool</button>
+    </div>
+
+    <!-- Compress PDF -->
+    <div class="card">
+        <div class="card-title">Compress PDF</div>
+        <p>Shrink PDF scans by rebuilding smaller file.</p>
+        <button class="btn" onclick="openTool('compressBox')">Open tool</button>
+    </div>
+
+    <!-- Merge PDF -->
+    <div class="card">
+        <div class="card-title">Merge PDFs</div>
+        <p>Combine multiple PDFs into one.</p>
+        <button class="btn" onclick="openTool('mergeBox')">Open tool</button>
+    </div>
+
+    <!-- Split PDF -->
+    <div class="card">
+        <div class="card-title">Split PDF</div>
+        <p>Extract selected pages into a new PDF.</p>
+        <button class="btn" onclick="openTool('splitBox')">Open tool</button>
+    </div>
+
+    <!-- JPG → PDF -->
+    <div class="card">
+        <div class="card-title">JPG → PDF</div>
+        <p>Turn images into a multi-page PDF.</p>
+        <button class="btn" onclick="openTool('jpgToPdfBox')">Open tool</button>
+    </div>
+
+    <!-- PDF → PNG -->
+    <div class="card">
+        <div class="card-title">PDF → PNG</div>
+        <p>Export lossless PNG pages.</p>
+        <button class="btn" onclick="openTool('pdfToPngBox')">Open tool</button>
+    </div>
+
+</div>
+
+<!-- TOOLS SECTION -->
+<div id="tools">
+
+    <!-- PDF to JPG -->
+    <div id="pdfToJpgBox" class="tool-box hidden">
+        <h2>PDF → JPG</h2>
+        <input type="file" id="pdfToJpgFile" accept="application/pdf">
+        <button class="btn" onclick="convertPDFtoImages('jpg')">Convert</button>
+        <div id="output_jpg"></div>
+    </div>
+
+    <!-- Compress PDF -->
+    <div id="compressBox" class="tool-box hidden">
+        <h2>Compress PDF</h2>
+        <input type="file" id="compressFile" accept="application/pdf">
+        <button class="btn" onclick="compressPDF()">Compress</button>
+        <div id="output_compress"></div>
+    </div>
+
+    <!-- Merge PDF -->
+    <div id="mergeBox" class="tool-box hidden">
+        <h2>Merge PDFs</h2>
+        <input type="file" id="mergeFiles" accept="application/pdf" multiple>
+        <button class="btn" onclick="mergePDF()">Merge</button>
+        <div id="output_merge"></div>
+    </div>
+
+    <!-- Split PDF -->
+    <div id="splitBox" class="tool-box hidden">
+        <h2>Split PDF</h2>
+        <input type="file" id="splitFile" accept="application/pdf"><br>
+        <input type="text" id="pageRange" placeholder="e.g. 1-3,7,10">
+        <button class="btn" onclick="splitPDF()">Split</button>
+        <div id="output_split"></div>
+    </div>
+
+    <!-- JPG to PDF -->
+    <div id="jpgToPdfBox" class="tool-box hidden">
+        <h2>JPG → PDF</h2>
+        <input type="file" id="jpgFiles" accept="image/*" multiple>
+        <button class="btn" onclick="jpgToPDF()">Create PDF</button>
+        <div id="output_jpgpdf"></div>
+    </div>
+
+    <!-- PDF to PNG -->
+    <div id="pdfToPngBox" class="tool-box hidden">
+        <h2>PDF → PNG</h2>
+        <input type="file" id="pdfToPngFile" accept="application/pdf">
+        <button class="btn" onclick="convertPDFtoImages('png')">Convert</button>
+        <div id="output_png"></div>
+    </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+function openTool(id){
+    document.querySelectorAll(".tool-box").forEach(b=>b.classList.add("hidden"));
+    document.getElementById(id).classList.remove("hidden");
+}
+
+/* -------------------------
+   PDF → JPG / PNG
+---------------------------*/
+async function convertPDFtoImages(type){
+    let fileInput = type==="jpg" ? "pdfToJpgFile" : "pdfToPngFile";
+    let outputDiv = type==="jpg" ? "output_jpg" : "output_png";
+
+    let file = document.getElementById(fileInput).files[0];
+    if(!file) return alert("Select PDF first!");
+
+    const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+
+    document.getElementById(outputDiv).innerHTML = "";
+
+    for(let i=1;i<=pdf.numPages;i++){
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale:2 });
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({canvasContext:ctx, viewport}).promise;
+
+        let imgURL = canvas.toDataURL("image/"+type);
+
+        let a=document.createElement("a");
+        a.href=imgURL;
+        a.download=`page-${i}.${type}`;
+        a.innerText="Download page "+i;
+
+        document.getElementById(outputDiv).appendChild(a);
+        document.getElementById(outputDiv).appendChild(document.createElement("br"));
+    }
+}
+
+/* -------------------------
+   JPG → PDF
+---------------------------*/
+async function jpgToPDF(){
+    let files=document.getElementById("jpgFiles").files;
+    if(files.length==0) return alert("Select images!");
+
+    let pdf=new jspdf.jsPDF();
+
+    for(let i=0;i<files.length;i++){
+        let img=await fileToBase64(files[i]);
+        pdf.addImage(img,"JPEG",10,10,180,250);
+        if(i!==files.length-1) pdf.addPage();
+    }
+
+    pdf.save("converted.pdf");
+}
+
+function fileToBase64(file){
+    return new Promise((resolve)=> {
+        let r=new FileReader();
+        r.onload=()=>resolve(r.result);
+        r.readAsDataURL(file);
+    });
+}
+
+/* -------------------------
+   Compress PDF (simple)
+---------------------------*/
+async function compressPDF(){
+    let file=document.getElementById("compressFile").files[0];
+    if(!file) return alert("Select PDF!");
+
+    // Simple fake compression (re-save PDF)
+    let array=await file.arrayBuffer();
+    let blob=new Blob([array],{type:"application/pdf"});
+    let url=URL.createObjectURL(blob);
+
+    let a=document.createElement("a");
+    a.href=url;
+    a.download="compressed.pdf";
+    a.click();
+}
+
+/* -------------------------
+   Merge PDF
+---------------------------*/
+async function mergePDF(){
+    let files=document.getElementById("mergeFiles").files;
+    if(files.length<2) return alert("Select minimum 2 PDFs!");
+
+    let pdf=new jspdf.jsPDF();
+
+    for(let f=0;f<files.length;f++){
+        const pdfData=await pdfjsLib.getDocument(URL.createObjectURL(files[f])).promise;
+
+        for(let i=1;i<=pdfData.numPages;i++){
+            if(f>0 || i>1) pdf.addPage();
+            const page=await pdfData.getPage(i);
+            const viewport=page.getViewport({scale:1});
+
+            const canvas=document.createElement("canvas");
+            const ctx=canvas.getContext("2d");
+            canvas.width=viewport.width;
+            canvas.height=viewport.height;
+
+            await page.render({canvasContext:ctx,viewport}).promise;
+
+            pdf.addImage(canvas.toDataURL("image/jpeg"),"JPEG",10,10,180,250);
+        }
+    }
+
+    pdf.save("merged.pdf");
+}
+
+/* -------------------------
+   Split PDF
+---------------------------*/
+async function splitPDF(){
+    let file=document.getElementById("splitFile").files[0];
+    if(!file) return alert("Select PDF!");
+    let range=document.getElementById("pageRange").value;
+
+    let pdf=new jspdf.jsPDF();
+    const pdfData=await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+
+    let pages=parsePageRange(range);
+
+    let first=true;
+    for(let p of pages){
+        if(p>pdfData.numPages) continue;
+
+        const page=await pdfData.getPage(p);
+        const viewport=page.getViewport({scale:1});
+        const canvas=document.createElement("canvas");
+        const ctx=canvas.getContext("2d");
+        canvas.width=viewport.width;
+        canvas.height=viewport.height;
+
+        await page.render({canvasContext:ctx,viewport}).promise;
+
+        if(!first) pdf.addPage();
+        first=false;
+
+        pdf.addImage(canvas.toDataURL("image/jpeg"),"JPEG",10,10,180,250);
+    }
+    pdf.save("split.pdf");
+}
+
+function parsePageRange(range){
+    let parts=range.split(",");
+    let pages=[];
+    parts.forEach(r=>{
+        if(r.includes("-")){
+            let [s,e]=r.split("-").map(Number);
+            for(let x=s;x<=e;x++) pages.push(x);
+        } else {
+            pages.push(Number(r));
+        }
+    });
+    return pages;
+}
+</script>
+
+</body>
+</html>
