@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Passport Photo Maker — Auto Enhance & 30-on-A4</title>
+<style>
+  body { font-family: system-ui, -apple-system, Roboto, "Noto Sans", sans-serif; margin: 12px; color:#111; }
+  h1 { font-size: 20px; margin: 0 0 12px 0; }
+  .controls { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
+  .box { border:1px solid #ddd; padding:10px; border-radius:8px; background:#fafafa; }
+  label { font-size:13px; display:block; margin-bottom:6px; }
+  input[type="file"] { display:block; }
+  #gallery { display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+  .thumb { width:160px; border:1px solid #eee; padding:8px; border-radius:6px; background:white; box-shadow:0 1px 2px rgba(0,0,0,0.03);}
+  .thumb img { display:block; width:100%; height:max-content; object-fit:cover; border-radius:4px; }
+  .thumb .meta { margin-top:6px; font-size:12px; }
+  button { padding:6px 10px; border-radius:6px; border:1px solid #bbb; cursor:pointer; background:white; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  .small { font-size:12px; padding:4px 8px; }
+  #sheetCanvas { width:100%; max-width:900px; border:1px dashed #bbb; margin-top:12px; background:#fff; }
+  .note { font-size:13px; color:#444; margin-top:8px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  input[type="number"] { width:80px; padding:6px; border-radius:6px; border:1px solid #ccc; }
+  select { padding:6px; border-radius:6px; border:1px solid #ccc;}
+</style>
+</head>
+<body>
+  <h1>Passport Photo Maker — AI Auto-Enhance & 30-on-A4</h1>
+
+  <div class="controls">
+    <div class="box">
+      <label>1) Images चुनें (एक साथ ज़्यादा से ज़्यादा 30)</label>
+      <input id="fileInput" type="file" accept="image/*" multiple />
+      <div class="note">हर तस्वीर के नीचे <strong>Auto Enhance</strong> होगा — apply एक बार होने पर disable रहेगा.</div>
+    </div>
+
+    <div class="box">
+      <label>2) Passport size (आप mm में बदल सकते हैं)</label>
+      <div class="row">
+        <div>
+          <label>चौड़ाई (mm)</label>
+          <input id="pw" type="number" value="35" min="10" />
+        </div>
+        <div>
+          <label>ऊँचाई (mm)</label>
+          <input id="ph" type="number" value="45" min="10" />
+        </div>
+        <div>
+          <label>DPI (print quality)</label>
+          <input id="dpi" type="number" value="300" min="96" />
+        </div>
+      </div>
+      
+    </div>
+
+    <div class="box">
+      <label>3) Layout चुनें</label>
+      <div class="row">
+        <div>
+          <label>Columns</label>
+          <select id="cols"><option>6</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+        </div>
+        <div>
+          <label>Rows</label>
+          <select id="rows"><option>5</option><option>6</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+        </div>
+      </div>
+      <div class="note">Default: 6 x 5 = 30 photos on A4.</div>
+    </div>
+
+
+
+    <!-- Add inside the .controls div (ek naya box) -->
+<div class="box">
+  <label>4) Photo Border Settings</label>
+  <div class="row">
+    <div>
+      <label>Border Color</label>
+      <input id="borderColor" type="color" value="#000000" />
+    </div>
+    <div>
+      <label>Border Thickness (px)</label>
+      <input id="borderWidth" type="number" value="2" min="0" />
+    </div>
+  </div>
+  <div class="note">Yeh settings A4 sheet generate karte waqt apply hongi.</div>
+</div>
+
+    
+  </div>
+
+  <div>
+    <button id="generateBtn" class="small">A4 Sheet Generate karo (Preview)</button>
+    <button id="downloadBtn" class="small" disabled>Sheet PNG Download karo</button>
+    <button id="clearBtn" class="small">Saare images clear karo</button>
+    <button id="printBtn" class="small" disabled>Sheet Print Karo</button>
+
+  </div>
+
+  <div id="gallery"></div>
+
+  <canvas id="sheetCanvas" width="2480" height="3508" style="display:block"></canvas>
+
+  <script>
+  // Utility: mm to pixels at DPI
+  function mmToPx(mm, dpi) {
+    return Math.round((mm / 25.4) * dpi);
+  }
+
+  // Image store
+  const images = []; // {file, imgElement, enhanced:bool, editedDataURL}
+
+  const fileInput = document.getElementById('fileInput');
+  const gallery = document.getElementById('gallery');
+  const generateBtn = document.getElementById('generateBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  const clearBtn = document.getElementById('clearBtn');
+  const printBtn = document.getElementById('printBtn');
+
+  const sheetCanvas = document.getElementById('sheetCanvas');
+  const ctxSheet = sheetCanvas.getContext('2d');
+
+  fileInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files).slice(0, 30 - images.length);
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      const dataURL = await readFileAsDataURL(file);
+      const img = await createImage(dataURL);
+      const item = { file, img, enhanced:false, dataURL };
+      images.push(item);
+      renderGallery();
+    }
+    fileInput.value = '';
+  });
+
+  clearBtn.addEventListener('click', () => {
+    images.length = 0;
+    renderGallery();
+    downloadBtn.disabled = true;
+    ctxSheet.clearRect(0,0,sheetCanvas.width,sheetCanvas.height);
+  });
+
+  function renderGallery(){
+    gallery.innerHTML = '';
+    images.forEach((it, idx) => {
+      const div = document.createElement('div');
+      div.className = 'thumb';
+      div.innerHTML = `
+        <img src="${it.enhanced ? it.dataURL : it.img.src}" />
+        <div class="meta">
+          <div>File: ${escapeHtml(it.file.name)}</div>
+          <div style="margin-top:6px;">
+            <button data-idx="${idx}" class="enhBtn small">${it.enhanced ? 'Enhanced ✅' : 'Auto Enhance'}</button>
+            <button data-idx="${idx}" class="removeBtn small">Remove</button>
+          </div>
+        </div>
+      `;
+      gallery.appendChild(div);
+    });
+
+    // attach handlers
+    gallery.querySelectorAll('.enhBtn').forEach(b=>{
+      b.addEventListener('click', async (ev)=>{
+        const i = +b.getAttribute('data-idx');
+        if (images[i].enhanced) return;
+        b.disabled = true;
+        b.textContent = 'Applying...';
+        try {
+          await autoEnhanceImage(images[i]);
+          images[i].enhanced = true;
+          b.textContent = 'Enhanced ✅';
+          b.disabled = true;
+          renderGallery();
+        } catch(err) {
+          console.error(err);
+          b.disabled = false;
+          b.textContent = 'Auto Enhance';
+          alert('Enhance fail: ' + err);
+        }
+      });
+    });
+
+    gallery.querySelectorAll('.removeBtn').forEach(b=>{
+      b.addEventListener('click', (ev)=>{
+        const i = +b.getAttribute('data-idx');
+        images.splice(i,1);
+        renderGallery();
+      });
+    });
+  }
+
+  // Auto-enhance: apply simple auto white balance (Gray World) + histogram stretch per channel
+  async function autoEnhanceImage(item) {
+    // draw to offscreen canvas
+    const img = item.img;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    const g = off.getContext('2d');
+    g.drawImage(img,0,0,w,h);
+    let imgData = g.getImageData(0,0,w,h);
+    const data = imgData.data;
+
+    // Auto white balance: Gray World
+    let rSum=0,gSum=0,bSum=0, cnt=0;
+    for (let i=0;i<data.length;i+=4){
+      rSum += data[i];
+      gSum += data[i+1];
+      bSum += data[i+2];
+      cnt++;
+    }
+    rSum/=cnt; gSum/=cnt; bSum/=cnt;
+    const gray = (rSum + gSum + bSum)/3;
+    const rGain = gray / (rSum||1);
+    const gGain = gray / (gSum||1);
+    const bGain = gray / (bSum||1);
+    for (let i=0;i<data.length;i+=4){
+      data[i] = clamp(data[i]*rGain);
+      data[i+1] = clamp(data[i+1]*gGain);
+      data[i+2] = clamp(data[i+2]*bGain);
+    }
+
+    // Histogram stretch per channel
+    const hist = { r:new Uint32Array(256), g:new Uint32Array(256), b:new Uint32Array(256) };
+    for (let i=0;i<data.length;i+=4){
+      hist.r[data[i]]++;
+      hist.g[data[i+1]]++;
+      hist.b[data[i+2]]++;
+    }
+    // find low/high percentile (1% and 99%)
+    function getStretchLUT(harr){
+      const total = harr.reduce((a,b)=>a+b,0);
+      const lowCount = Math.max(1, Math.floor(total*0.01));
+      const highCount = Math.max(1, Math.floor(total*0.99));
+      let cum=0, lowV=0, highV=255;
+      for (let i=0;i<256;i++){
+        cum += harr[i];
+        if (cum >= lowCount){ lowV = i; break; }
+      }
+      cum = 0;
+      for (let i=255;i>=0;i--){
+        cum += harr[i];
+        if (cum >= (total - highCount)){ highV = i; break; }
+      }
+      // build LUT
+      const lut = new Uint8Array(256);
+      const denom = (highV - lowV) || 1;
+      for (let i=0;i<256;i++){
+        let v = Math.round((i - lowV) * 255 / denom);
+        lut[i] = clamp(v);
+      }
+      return lut;
+    }
+    const rLUT = getStretchLUT(hist.r);
+    const gLUT = getStretchLUT(hist.g);
+    const bLUT = getStretchLUT(hist.b);
+    for (let i=0;i<data.length;i+=4){
+      data[i] = rLUT[data[i]];
+      data[i+1] = gLUT[data[i+1]];
+      data[i+2] = bLUT[data[i+2]];
+    }
+
+    // small unsharp mask (light sharpening)
+    const sharpened = unsharpMask(imgData, 0.6, 1);
+    g.putImageData(sharpened,0,0);
+
+    // set new dataURL
+    item.dataURL = off.toDataURL('image/jpeg', 0.92);
+  }
+
+  // clamp util
+  function clamp(v){ return v < 0 ? 0 : (v > 255 ? 255 : Math.round(v)); }
+
+  // Read file -> DataURL
+  function readFileAsDataURL(file){
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = ()=> res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  // create Image from dataURL
+  function createImage(dataURL){
+    return new Promise((res, rej)=>{
+      const img = new Image();
+      img.onload = ()=> res(img);
+      img.onerror = rej;
+      img.src = dataURL;
+    });
+  }
+
+  // Unsharp mask - lightweight: blur using box blur then combine
+  function unsharpMask(imageData, amount=0.5, radius=1){
+    // Very simple box blur for small radius (1)
+    const w = imageData.width, h = imageData.height;
+    const src = imageData.data;
+    const dst = new Uint8ClampedArray(src.length);
+    // blur -> tmp
+    const tmp = new Uint32Array(src.length);
+    // box blur kernel 3x3
+    for (let y=0;y<h;y++){
+      for (let x=0;x<w;x++){
+        let r=0,g=0,b=0,a=0, cnt=0;
+        for (let ky=-radius; ky<=radius; ky++){
+          const yy = y+ky;
+          if (yy<0||yy>=h) continue;
+          for (let kx=-radius; kx<=radius; kx++){
+            const xx = x+kx;
+            if (xx<0||xx>=w) continue;
+            const idx = (yy*w + xx)*4;
+            r += src[idx]; g += src[idx+1]; b += src[idx+2]; a += src[idx+3];
+            cnt++;
+          }
+        }
+        const i = (y*w + x)*4;
+        tmp[i] = r/cnt; tmp[i+1] = g/cnt; tmp[i+2] = b/cnt; tmp[i+3] = a/cnt;
+      }
+    }
+    // combine: dst = src + amount*(src - blur)
+    for (let i=0;i<src.length;i+=4){
+      dst[i]   = clamp(src[i]   + amount * (src[i]   - tmp[i]));
+      dst[i+1] = clamp(src[i+1] + amount * (src[i+1] - tmp[i+1]));
+      dst[i+2] = clamp(src[i+2] + amount * (src[i+2] - tmp[i+2]));
+      dst[i+3] = src[i+3];
+    }
+    return new ImageData(dst, w, h);
+  }
+
+  // Basic HTML-escape for filenames
+  function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // Generate A4 sheet
+  generateBtn.addEventListener('click', async ()=>{
+    if (images.length === 0){ alert('Koi image upload nahi hai.'); return; }
+    const dpi = parseInt(document.getElementById('dpi').value) || 300;
+    const cols = parseInt(document.getElementById('cols').value) || 6;
+    const rows = parseInt(document.getElementById('rows').value) || 5;
+    const pw_mm = parseFloat(document.getElementById('pw').value) || 35;
+    const ph_mm = parseFloat(document.getElementById('ph').value) || 45;
+
+    // A4 dimensions in px at DPI
+    const A4_w_px = mmToPx(210, dpi);
+    const A4_h_px = mmToPx(297, dpi);
+    sheetCanvas.width = A4_w_px;
+    sheetCanvas.height = A4_h_px;
+    // scale canvas visual size to fit but keep internal px for download
+    sheetCanvas.style.width = Math.min(900, A4_w_px/ (dpi/72)) + 'px';
+
+    // clear
+    ctxSheet.fillStyle = '#ffffff';
+    ctxSheet.fillRect(0,0, sheetCanvas.width, sheetCanvas.height);
+
+    // slot size px
+    const photo_w = mmToPx(pw_mm, dpi);
+    const photo_h = mmToPx(ph_mm, dpi);
+    // compute margins so grid centers
+    
+  
+    // compute margins so grid centers (default)
+let hGap = Math.max(10, Math.floor((sheetCanvas.width - (cols*photo_w)) / (cols+1)));
+let vGap = Math.max(10, Math.floor((sheetCanvas.height - (rows*photo_h)) / (rows+1)));
+
+let startX = hGap;
+let startY = vGap;
+
+// ⭐ FIX: Agar sirf 1 row ho, to TOP se start kare — center nahi
+if (rows === 1) {
+    startY = 10;     // Very top margin
+    vGap = 10;       // कोई vertical gap नहीं चाहिए
+}
+
+
+    // for each cell, draw image (use enhanced if available, else original)
+    let idx = 0;
+    for (let r=0; r<rows; r++){
+      for (let c=0; c<cols; c++){
+        const x = startX + c * (photo_w + hGap);
+        const y = startY + r * (photo_h + vGap);
+        const imgObj = images[idx % images.length]; // repeat if fewer than 30
+        const srcImg = imgObj.enhanced ? await createImage(imgObj.dataURL) : imgObj.img;
+
+        // center-crop to fit photo_w x photo_h while preserving aspect ratio
+        drawCover(ctxSheet, srcImg, x, y, photo_w, photo_h);
+
+          // <-- Yahan add karein -->
+      const borderColor = document.getElementById('borderColor').value;
+      const borderWidth = parseInt(document.getElementById('borderWidth').value) || 0;
+      if (borderWidth > 0) {
+        ctxSheet.strokeStyle = borderColor;
+        ctxSheet.lineWidth = borderWidth;
+        ctxSheet.strokeRect(x, y, photo_w, photo_h);
+      }
+      // <-- Yahan tak -->
+
+
+        idx++;
+        if (idx >= cols*rows) break;
+      }
+      if (idx >= cols*rows) break;
+    }
+
+    // optional: draw faint cut-lines
+    ctxSheet.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctxSheet.lineWidth = Math.max(1, Math.round(dpi/150));
+    idx = 0;
+    for (let r=0; r<rows; r++){
+      for (let c=0; c<cols; c++){
+        const x = startX + c * (photo_w + hGap);
+        const y = startY + r * (photo_h + vGap);
+        ctxSheet.strokeRect(x+2, y+2, photo_w-4, photo_h-4);
+        idx++; if (idx>=cols*rows) break;
+      }
+      if (idx>=cols*rows) break;
+    }
+
+    downloadBtn.disabled = false;
+    printBtn.disabled = false;
+
+    alert('Preview ready — agar theek lage to "Download" par click karo.');
+  });
+
+  // Draw image cover (center crop) in target rectangle
+  function drawCover(ctx, img, dx, dy, dw, dh){
+    const sw = img.naturalWidth || img.width;
+    const sh = img.naturalHeight || img.height;
+    const dstRatio = dw/dh;
+    const srcRatio = sw/sh;
+    let sx, sy, swc, shc;
+    if (srcRatio > dstRatio){
+      // source wider -> crop sides
+      shc = sh;
+      swc = Math.round(shc * dstRatio);
+      sx = Math.round((sw - swc)/2);
+      sy = 0;
+    } else {
+      // source taller -> crop top/bottom
+      swc = sw;
+      shc = Math.round(swc / dstRatio);
+      sx = 0;
+      sy = Math.round((sh - shc)/2);
+    }
+    ctx.drawImage(img, sx, sy, swc, shc, dx, dy, dw, dh);
+  }
+
+  // Download generated sheet as PNG
+  downloadBtn.addEventListener('click', ()=>{
+    const a = document.createElement('a');
+    a.href = sheetCanvas.toDataURL('image/png');
+    a.download = 'passport_sheet.png';
+    a.click();
+  });
+
+  printBtn.addEventListener('click', ()=>{
+  const dataUrl = sheetCanvas.toDataURL('image/png');
+  const w = window.open('');
+  w.document.write('<img src="'+dataUrl+'" style="width:100%; display:block; margin:0 auto;">');
+  w.document.close();
+  w.focus();
+  w.print();
+});
+
+
+  // Simple helper: attempt to keep operations non-blocking for many images
+  // (Not required here.)
+
+  </script>
+</body>
+</html>
