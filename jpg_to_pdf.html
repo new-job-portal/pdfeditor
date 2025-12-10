@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JPG → PDF (Grid Preview + Drag)</title>
+<style>
+:root{
+  --bg:#0d0f1a;
+  --tool-bg:#111522;
+  --muted:#9fb0ff;
+  --accent:#4862ff;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:#e6eefc;
+}
+.header{
+  padding:24px;
+  font-size:26px;
+  font-weight:700;
+  background:linear-gradient(90deg,rgba(255,255,255,0.02),transparent);
+}
+.container{
+  max-width:1100px;
+  margin:18px auto;
+  padding:18px;
+  background:var(--tool-bg);
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.03);
+}
+.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;}
+input[type=file]{display:inline-block}
+.btn{
+  padding:10px 14px;border-radius:8px;border:none;cursor:pointer;
+  background:linear-gradient(90deg,var(--accent),#3bb0ff);color:white;font-weight:600;
+}
+.add-btn{
+  width:40px;height:40px;border-radius:50%;font-size:22px;display:inline-flex;
+  align-items:center;justify-content:center;background:#24304f;color:#dce9ff;border:none;cursor:pointer;
+}
+.info{color:#9aa8ff66;text-align:center;margin-top:12px}
+
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill,minmax(140px,1fr));
+  gap:12px;
+  margin-top:18px;
+}
+.thumb{
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  border-radius:8px;
+  padding:8px;
+  text-align:center;
+  position:relative;
+  border:1px solid rgba(255,255,255,0.03);
+  cursor:grab;
+}
+.thumb.dragging{opacity:0.5;transform:scale(0.98)}
+.thumb-img{
+  width:100%;height:100px;object-fit:cover;border-radius:6px;background:#0b0f1a;
+}
+.thumb .fname{font-size:13px;color:var(--muted);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.remove-btn{
+  position:absolute;top:6px;right:6px;background:#ff6b6b;border:none;border-radius:50%;
+  width:26px;height:26px;color:white;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.drag-hint{
+  position:absolute;left:6px;top:6px;background:rgba(255,255,255,0.03);border-radius:4px;padding:4px 6px;font-size:12px;color:#cfe0ff66;
+}
+
+@media(max-width:480px){
+  .thumb-img{height:90px}
+  .grid{gap:10px}
+}
+
+/* ⭐⭐ ADDED FULLSCREEN PREVIEW CSS — (NO DELETE DONE) ⭐⭐ */
+#fullPreview{
+  display:none;
+  position:fixed;
+  top:0;left:0;
+  width:100%;height:100%;
+  background:rgba(0,0,0,0.85);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+}
+#fullPreview img{
+  max-width:92%;
+  max-height:92%;
+  border-radius:10px;
+  box-shadow:0 0 15px #000;
+}
+#closeFull{
+  position:absolute;
+  top:20px;
+  right:30px;
+  font-size:40px;
+  font-weight:bold;
+  color:white;
+  cursor:pointer;
+}
+
+</style>
+</head>
+<body>
+
+<div class="header">JPG To PDF — Grid Preview + Drag</div>
+
+<div class="container">
+  <div class="controls">
+    <input type="file" id="jpgFiles" accept="image/*" multiple onchange="handleMainFiles(event)">
+    <button class="add-btn" title="Add more images" onclick="triggerAddMore()">+</button>
+    <input type="file" id="addMoreFiles" accept="image/*" multiple style="display:none" onchange="handleAddMore(event)">
+    <button class="btn" onclick="createPDF()">Create PDF</button>
+  </div>
+
+  <div class="info">Select images → preview will show below. Drag thumbnails to reorder. Click × to remove.</div>
+
+  <div id="gallery" class="grid" aria-live="polite"></div>
+</div>
+
+<div style="max-width:1100px;margin:18px auto;color:#9aa8ff66;text-align:center;">
+  Client-side demo — uses jsPDF for PDF creation.
+</div>
+
+<!-- Fullscreen Preview Modal ⭐ (Added) -->
+<div id="fullPreview">
+    <span id="closeFull" onclick="closeFull()">✖</span>
+    <img id="fullImg">
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+let items = [];
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function renderGallery(){
+  const g = document.getElementById('gallery');
+  g.innerHTML = '';
+  items.forEach((it, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.draggable = true;
+    div.dataset.id = it.id;
+
+    /* ⭐⭐ Added onclick inside thumbnail image — WITHOUT EDITING ANY EXISTING CODE ⭐⭐ */
+    div.innerHTML = `
+      <button class="remove-btn" title="Remove" onclick="removeItem('${it.id}')">×</button>
+      <div class="drag-hint">☰</div>
+      <img class="thumb-img" onclick="openFull('${it.dataURL}')" src="${it.dataURL}" alt="${escapeHtml(it.file.name)}">
+      <div class="fname" title="${escapeHtml(it.file.name)}">${escapeHtml(it.file.name)}</div>
+    `;
+
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', it.id);
+      div.classList.add('dragging');
+    });
+    div.addEventListener('dragend', e => {
+      div.classList.remove('dragging');
+    });
+
+    div.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const targetId = it.id;
+      if(!draggedId || draggedId === targetId) return;
+      reorderItems(draggedId, targetId);
+    });
+
+    g.appendChild(div);
+  });
+}
+
+function escapeHtml(s){ return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'); }
+
+function reorderItems(draggedId, targetId){
+  const from = items.findIndex(x=>x.id===draggedId);
+  const to = items.findIndex(x=>x.id===targetId);
+  if(from === -1 || to === -1) return;
+  const [moved] = items.splice(from,1);
+  items.splice(to,0,moved);
+  renderGallery();
+}
+
+function removeItem(id){
+  items = items.filter(x=>x.id !== id);
+  renderGallery();
+}
+
+async function handleMainFiles(e){
+  const fl = Array.from(e.target.files || []);
+  if(fl.length===0) return;
+  const processed = await Promise.all(fl.map(async f=>({
+    id: uid(), file: f, dataURL: await fileToDataURL(f)
+  })));
+  items = processed;
+  renderGallery();
+}
+
+async function handleAddMore(e){
+  const fl = Array.from(e.target.files || []);
+  if(fl.length===0) return;
+  const processed = await Promise.all(fl.map(async f=>({
+    id: uid(), file: f, dataURL: await fileToDataURL(f)
+  })));
+  items = items.concat(processed);
+  renderGallery();
+  e.target.value = '';
+}
+
+function triggerAddMore(){ document.getElementById('addMoreFiles').click(); }
+
+async function createPDF(){
+  if(items.length===0){ alert('Please select images first.'); return; }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  for(let i=0;i<items.length;i++){
+    const data = items[i].dataURL;
+    const img = new Image();
+    img.src = data;
+    await new Promise(res=>img.onload = res);
+
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+
+    let w = pageW - 2*margin;
+    let h = (img.height * w / img.width);
+    if(h > pageH - 2*margin){
+      h = pageH - 2*margin;
+      w = (img.width * h / img.height);
+    }
+    const x = (pageW - w)/2;
+    const y = (pageH - h)/2;
+
+    pdf.addImage(data, 'JPEG', x, y, w, h);
+    if(i < items.length - 1) pdf.addPage();
+  }
+  pdf.save('images-to-pdf.pdf');
+}
+
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Delete'){
+    const active = document.activeElement;
+    if(active && active.classList && active.classList.contains('thumb')){
+      const id = active.dataset.id;
+      if(id) removeItem(id);
+    }
+  }
+});
+
+document.getElementById('gallery').addEventListener('click', (ev)=>{
+  let node = ev.target;
+  while(node && !node.classList?.contains('thumb')) node = node.parentElement;
+  if(node) node.tabIndex = 0, node.focus();
+});
+
+renderGallery();
+
+/* ⭐⭐⭐ Added Fullscreen JS — (No existing lines changed) ⭐⭐⭐ */
+function openFull(src){
+    document.getElementById("fullImg").src = src;
+    document.getElementById("fullPreview").style.display = "flex";
+}
+function closeFull(){
+    document.getElementById("fullPreview").style.display = "none";
+}
+
+</script>
+
+</body>
+</html>

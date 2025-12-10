@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>All-in-One PDF Tools</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{
+  --bg:#0d0f1a;
+  --card:#161a2b;
+  --muted:#8ba4ff;
+  --accent:#4862ff;
+  --card-border:#232744;
+  --tool-bg:#111522;
+}
+*{box-sizing:border-box}
+body{
+    margin:0;
+    font-family:Inter,Arial,Helvetica,sans-serif;
+    background:var(--bg);
+    color:white;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+}
+.header{
+    padding:30px 24px;
+    font-size:28px;
+    font-weight:700;
+    background:linear-gradient(90deg,rgba(255,255,255,0.02),transparent);
+}
+
+.btn{
+    margin-top:12px;
+    padding:10px 14px;
+    background:linear-gradient(90deg,var(--accent),#3bb0ff);
+    border:none;
+    border-radius:8px;
+    color:white;
+    cursor:pointer;
+    font-weight:600;
+}
+.btn:active{transform:translateY(1px)}
+.hidden{display:none}
+.tool-area{
+    max-width:1200px;margin:20px auto;padding:20px;border-radius:12px;background:var(--tool-bg);border:1px solid rgba(255,255,255,0.02)
+}
+h3{
+    text-align: center;
+    font-size: xx-large;
+}
+
+.tool-row{
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  text-align: center;
+}
+
+label{font-size:13px;color:#cbd5ff}
+input[type=file]{color:transparent}
+
+.file-name{
+  margin-top:8px;
+  font-size:20px;
+  color:#9fb0ff;
+}
+
+.output-links a{
+  display:inline-block;
+  margin:6px 8px;
+  padding:6px 10px;
+  background:#0b1220;
+  border-radius:8px;
+  color:#bfe4ff;
+  text-decoration:none;
+  border:1px solid rgba(255,255,255,0.03)
+}
+
+.footer{
+  padding:30px;
+  text-align:center;
+  color:#9aa8ff66
+}
+
+@media(max-width:600px){
+  .range-wrap input[type=range]{width:160px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">PDF To JPG</div>
+
+<!-- Tools -->
+<div class="tool-area">
+
+    <h3>PDF → JPG</h3>
+    <div class="tool-row">
+        <!-- multiple files support -->
+        <input type="file" id="pdfToJpgFile" accept="application/pdf" multiple onchange="showFileNames(event)">
+        <button class="btn" onclick="convertPDFtoImages('jpg')">Convert</button>
+    </div>
+
+    <!-- FILE NAME SHOW -->
+    <div id="fileNameDisplay" class="file-name"></div>
+
+    <div id="output_jpg" class="output-links"></div>
+
+</div>
+
+<div class="footer">Client-side demo — works in modern browsers. Uses pdf.js and jsPDF libraries.</div>
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+/* MULTIPLE FILE NAME SHOW */
+function showFileNames(e){
+    const files = e.target.files;
+
+    if(files.length === 0){
+        document.getElementById("fileNameDisplay").textContent = "";
+        return;
+    }
+
+    // File names list
+    const names = Array.from(files).map(f => "• " + f.name);
+
+    // Display nicely (line break)
+    document.getElementById("fileNameDisplay").innerHTML =
+        "<strong>Selected Files:</strong><br>" + names.join("<br>");
+}
+
+/* ---------- PDF -> IMAGE (JPG/PNG) ---------- */
+async function convertPDFtoImages(type){
+    const input = (type==="jpg")?document.getElementById("pdfToJpgFile"):document.getElementById("pdfToPngFile");
+    const output = (type==="jpg")?document.getElementById("output_jpg"):document.getElementById("output_png");
+    const files = input.files;
+    if(files.length === 0){ alert("Select PDF file(s)."); return; }
+
+    output.innerHTML = "Processing...";
+
+    for(const file of files){
+        const loading = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+
+        for(let i=1;i<=loading.numPages;i++){
+            const page = await loading.getPage(i);
+            const vp = page.getViewport({scale:2});
+            const canvas = document.createElement("canvas");
+            canvas.width = vp.width; canvas.height = vp.height;
+            await page.render({canvasContext:canvas.getContext("2d"), viewport:vp}).promise;
+
+            const mime = (type==="jpg")?"image/jpeg":"image/png";
+            const data = canvas.toDataURL(mime);
+
+            const a = document.createElement("a");
+            a.href=data;
+            a.download=`${file.name}-page-${i}.${type}`;
+            a.textContent = `Download ${file.name} page ${i}`;
+            output.appendChild(a);
+        }
+    }
+
+    output.innerHTML += "<br>All files processed!";
+}
+</script>
+
+</body>
+</html>
