@@ -5,6 +5,24 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Passport Photo Maker — Auto Enhance & 30-on-A4</title>
 <style>
+
+  :root{
+  --bg:#590ed1;
+  --card:#161a2b;
+  --muted:#8ba4ff;
+  --accent:#4862ff;
+  --card-border:#232744;
+  --tool-bg:#111522;
+}
+*{box-sizing:border-box}
+body{
+    margin:0;
+    font-family:Inter,Arial,Helvetica,sans-serif;
+    background:var(--bg);
+    color:white;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+}
   body { font-family: system-ui, -apple-system, Roboto, "Noto Sans", sans-serif; margin: 12px; color:#111; }
   h1 { font-size: 20px; margin: 0 0 12px 0; }
   .controls { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
@@ -23,19 +41,51 @@
   .row { display:flex; gap:8px; align-items:center; }
   input[type="number"] { width:80px; padding:6px; border-radius:6px; border:1px solid #ccc; }
   select { padding:6px; border-radius:6px; border:1px solid #ccc;}
+  #shopName {
+    width: auto !important;
+    min-width: 50px;
+    font-size: 13px;
+    padding: 2px 4px;
+}
+
+.tool-box {
+    background:#1337ec;
+    padding:12px;
+    margin-bottom:12px;
+    border-radius:10px;
+    color:#fff;
+    font-size:14px;
+}
+
+.tool-box h3 {
+    margin-bottom:6px;
+    font-size:16px;
+}
+
+.tool-box input[type=range] {
+    width:100%;
+    margin:6px 0 18px 0;
+}
+h1{
+  color: #fff;
+}
+
+
 </style>
+
 </head>
 <body>
-  <h1>Passport Photo Maker — AI Auto-Enhance & 30-on-A4</h1>
+  <h1>Passport Photo Maker — AI Auto-Enhance </h1>
 
   <div class="controls">
-    <div class="box">
-      <label>1) Images चुनें (एक साथ ज़्यादा से ज़्यादा 30)</label>
+    <div class="tool-box">
+      <label>1) Images </label>
       <input id="fileInput" type="file" accept="image/*" multiple />
-      <div class="note">हर तस्वीर के नीचे <strong>Auto Enhance</strong> होगा — apply एक बार होने पर disable रहेगा.</div>
+      <div class="note"></div>
+    
     </div>
 
-    <div class="box">
+    <div class="tool-box">
       <label>2) Passport size (आप mm में बदल सकते हैं)</label>
       <div class="row">
         <div>
@@ -48,31 +98,31 @@
         </div>
         <div>
           <label>DPI (print quality)</label>
-          <input id="dpi" type="number" value="300" min="96" />
+          <input id="dpi" type="number" value="1200" min="96" />
         </div>
       </div>
       
     </div>
 
-    <div class="box">
-      <label>3) Layout चुनें</label>
+    <div class="tool-box">
+      <label>3) Layout </label>
       <div class="row">
         <div>
           <label>Columns</label>
-          <select id="cols"><option>6</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+          <select id="cols"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
         </div>
         <div>
           <label>Rows</label>
           <select id="rows"><option>5</option><option>6</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
         </div>
       </div>
-      <div class="note">Default: 6 x 5 = 30 photos on A4.</div>
+
     </div>
 
 
 
     <!-- Add inside the .controls div (ek naya box) -->
-<div class="box">
+<div class="tool-box">
   <label>4) Photo Border Settings</label>
   <div class="row">
     <div>
@@ -84,8 +134,44 @@
       <input id="borderWidth" type="number" value="2" min="0" />
     </div>
   </div>
-  <div class="note">Yeh settings A4 sheet generate karte waqt apply hongi.</div>
+
 </div>
+
+
+<!-- ⭐ NEW BOX: Shop Name Print Box (NO CHANGE TO EXISTING CODE) -->
+<div class="tool-box">
+  <label>5) Shop Name (Photo ke Left Side Vertically Print Hoga)</label>
+  <input id="shopName" type="text" placeholder="Shop Name likhiye" style="width:160px; padding:6px; border-radius:6px; border:1px solid #ccc;">
+ 
+</div>
+<!-- ⭐ NEW BOX END -->
+
+
+
+
+
+<script>
+const shopInput = document.getElementById("shopName");
+
+function autoResizeShop() {
+    const temp = document.createElement("span");
+    temp.style.visibility = "hidden";
+    temp.style.whiteSpace = "pre";
+    temp.style.fontSize = window.getComputedStyle(shopInput).fontSize;
+    temp.innerText = shopInput.value || " ";
+    document.body.appendChild(temp);
+
+    shopInput.style.width = (temp.offsetWidth + 10) + "px";
+
+    temp.remove();
+}
+
+shopInput.addEventListener("input", autoResizeShop);
+autoResizeShop();
+</script>
+
+
+
 
     
   </div>
@@ -337,7 +423,7 @@
   // Generate A4 sheet
   generateBtn.addEventListener('click', async ()=>{
     if (images.length === 0){ alert('Koi image upload nahi hai.'); return; }
-    const dpi = parseInt(document.getElementById('dpi').value) || 300;
+    const dpi = parseInt(document.getElementById('dpi').value) || 1200;
     const cols = parseInt(document.getElementById('cols').value) || 6;
     const rows = parseInt(document.getElementById('rows').value) || 5;
     const pw_mm = parseFloat(document.getElementById('pw').value) || 35;
@@ -387,6 +473,21 @@ if (rows === 1) {
         // center-crop to fit photo_w x photo_h while preserving aspect ratio
         drawCover(ctxSheet, srcImg, x, y, photo_w, photo_h);
 
+
+        // ⭐ Shop Name Vertical Print
+const shop = document.getElementById('shopName').value.trim();
+if (shop !== "") {
+    ctxSheet.save();
+    ctxSheet.translate(x - 20, y + photo_h / 2);
+    ctxSheet.rotate(-Math.PI / 2);
+    ctxSheet.fillStyle = "#000";
+    ctxSheet.font = Math.floor(photo_h * 0.07) + "px sans-serif";
+    ctxSheet.textAlign = "center";
+    ctxSheet.fillText(shop, 0, 0);
+    ctxSheet.restore();
+}
+
+
           // <-- Yahan add karein -->
       const borderColor = document.getElementById('borderColor').value;
       const borderWidth = parseInt(document.getElementById('borderWidth').value) || 0;
@@ -410,8 +511,10 @@ if (rows === 1) {
     idx = 0;
     for (let r=0; r<rows; r++){
       for (let c=0; c<cols; c++){
-        const x = startX + c * (photo_w + hGap);
-        const y = startY + r * (photo_h + vGap);
+   const namePadding = 20;   // ⭐ yahan aap padding badha sakte ho (px)
+const x = startX + namePadding + c * (photo_w + hGap);
+const y = startY + r * (photo_h + vGap);
+
         ctxSheet.strokeRect(x+2, y+2, photo_w-4, photo_h-4);
         idx++; if (idx>=cols*rows) break;
       }
