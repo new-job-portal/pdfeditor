@@ -7,13 +7,15 @@
 <style>
 
   :root{
-  --bg:#590ed1;
+  --bg:#7086f5;
   --card:#161a2b;
   --muted:#8ba4ff;
   --accent:#4862ff;
   --card-border:#232744;
   --tool-bg:#111522;
+
 }
+
 *{box-sizing:border-box}
 body{
     margin:0;
@@ -33,9 +35,9 @@ body{
   .thumb { width:160px; border:1px solid #eee; padding:8px; border-radius:6px; background:white; box-shadow:0 1px 2px rgba(0,0,0,0.03);}
   .thumb img { display:block; width:100%; height:max-content; object-fit:cover; border-radius:4px; }
   .thumb .meta { margin-top:6px; font-size:12px; }
-  button { padding:6px 10px; border-radius:6px; border:1px solid #bbb; cursor:pointer; background:white; }
+  button { padding:6px 10px; border-radius:10px; border:2px solid #ff0101; cursor:pointer; background:#1337ec; color:white;}
   button:disabled { opacity:0.5; cursor:not-allowed; }
-  .small { font-size:12px; padding:4px 8px; }
+  .small { font-size:20px; padding:4px 8px; }
   #sheetCanvas { width:100%; max-width:900px; border:1px dashed #bbb; margin-top:12px; background:#fff; }
   .note { font-size:13px; color:#444; margin-top:8px; }
   .row { display:flex; gap:8px; align-items:center; }
@@ -52,9 +54,11 @@ body{
     background:#1337ec;
     padding:12px;
     margin-bottom:12px;
-    border-radius:10px;
+  
     color:#fff;
     font-size:14px;
+    border-radius:20px; 
+    border:1px solid #ff0101;
 }
 
 .tool-box h3 {
@@ -69,6 +73,7 @@ body{
 h1{
   color: #fff;
 }
+
 
 /* Modal editor */
 .editor-modal{ position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999; }
@@ -188,10 +193,10 @@ autoResizeShop();
   </div>
 
   <div>
-    <button id="generateBtn" class="small">A4 Sheet Generate karo (Preview)</button>
-    <button id="downloadBtn" class="small" disabled>Sheet PNG Download karo</button>
-    <button id="clearBtn" class="small">Saare images clear karo</button>
-    <button id="printBtn" class="small" disabled>Sheet Print Karo</button>
+    <button id="generateBtn" class="small">Photo Preview</button>
+    <button id="downloadBtn" class="small" disabled>Download PNG File</button>
+    <button id="clearBtn" class="small">Clear All Photo</button>
+    <button id="printBtn" class="small" disabled>Print Photo</button>
 
   </div>
 
