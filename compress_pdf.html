@@ -2,211 +2,165 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Compress PDF – High Quality</title>
+<title>HD PDF Compressor</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <style>
-:root{
-  --bg:#0d0f1a;
-  --card:#161a2b;
-  --accent:#4862ff;
-  --tool-bg:#111522;
-}
-*{box-sizing:border-box}
 body{
   margin:0;
-  font-family:Arial,Helvetica,sans-serif;
-  background:var(--bg);
+  font-family:Arial;
+  background:#0d0f1a;
   color:#fff;
+  text-align:center;
 }
-.header{
-  padding:30px;
-  font-size:28px;
-  font-weight:700;
-}
-.tool-area{
-  max-width:900px;
-  margin:20px auto;
+.box{
+  max-width:700px;
+  margin:30px auto;
+  background:#111522;
   padding:20px;
-  background:var(--tool-bg);
-  border-radius:12px;
+  border-radius:10px;
 }
-h3{text-align:center;font-size:26px}
-.btn{
-  padding:10px 16px;
-  background:linear-gradient(90deg,var(--accent),#3bb0ff);
+button{
+  padding:10px 15px;
+  background:#4862ff;
   border:none;
-  border-radius:8px;
-  color:white;
-  font-weight:600;
+  color:#fff;
+  border-radius:6px;
   cursor:pointer;
 }
-.range-wrap{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin-top:10px;
-  justify-content:center;
-}
-input[type=range]{width:300px}
-.info{
-  margin-top:8px;
-  font-size:16px;
-  color:#9fb0ff;
-  text-align:center;
-}
-.output-links a{
-  display:inline-block;
-  margin-top:10px;
-  padding:8px 12px;
-  background:#0b1220;
-  border-radius:8px;
-  color:#bfe4ff;
-  text-decoration:none;
-}
-.footer{
-  padding:20px;
-  text-align:center;
-  color:#9aa8ff66;
-}
+input[type=range]{width:250px}
+.info{margin-top:10px;color:#9fb0ff}
 </style>
 </head>
 
 <body>
 
-<div class="header">Compress PDF (High Quality)</div>
+<h2>HD PDF Compressor (No Blur)</h2>
 
-<div class="tool-area">
-  <h3>Compress PDF</h3>
+<div class="box">
 
-  <input type="file" id="compressFile" accept="application/pdf" onchange="showPDFSize()">
+<input type="file" id="file" accept="application/pdf"><br><br>
 
-  <div id="fileName" class="info"></div>
+<label>Quality: <b id="val">70%</b></label><br>
+<input type="range" id="slider" min="40" max="100" value="70"><br>
 
-  <div class="range-wrap">
-    <label>Compression Level:
-      <b><span id="compValue">50%</span></b>
-    </label>
-  </div>
+<div id="size" class="info"></div>
+<div id="estimate" class="info" style="color:#ffd580"></div>
+<div id="newsize" class="info" style="color:#7fffb3"></div>
 
-  <div class="range-wrap">
-    <input type="range" id="compSlider" min="10" max="90" value="50" step="5" oninput="updateCompression()">
-  </div>
+<br>
+<button onclick="compress()">Compress PDF</button>
 
-  <div id="pdfCurrentSize" class="info"></div>
-  <div id="pdfNewSize" class="info" style="color:#7fffb3"></div>
+<div id="output" class="info"></div>
 
-  <div style="text-align:center;margin-top:14px">
-    <button class="btn" onclick="compressPDF()">Compress PDF</button>
-  </div>
-
-  <div id="output_compress" class="output-links" style="text-align:center"></div>
 </div>
 
-<div class="footer">Client-side PDF compression (blur-free version)</div>
-
-<!-- Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-let originalPDFSize = 0;
+// worker fix
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
 
-function showPDFSize(){
-  const f = document.getElementById("compressFile").files[0];
+let originalSize = 0;
+
+// file select
+document.getElementById("file").onchange = function(){
+  const f = this.files[0];
   if(!f) return;
 
-  document.getElementById("fileName").innerHTML =
-    "Selected File: <b>" + f.name + "</b>";
+  originalSize = f.size;
+  document.getElementById("size").innerHTML =
+    "Original Size: " + format(originalSize);
 
-  originalPDFSize = f.size;
-  document.getElementById("pdfCurrentSize").innerHTML =
-    "Current Size: <b>" + formatBytes(originalPDFSize) + "</b>";
+  updateEstimate(); // 🔥 call on load
+};
 
-  updateCompression();
+// slider change
+document.getElementById("slider").oninput = function(){
+  document.getElementById("val").innerText = this.value + "%";
+  updateEstimate(); // 🔥 live update
+};
+
+// 🔥 NEW FUNCTION (estimate size)
+function updateEstimate(){
+  if(!originalSize) return;
+
+  const percent = document.getElementById("slider").value;
+
+  // smart formula (approximation)
+  let estimated = originalSize * (percent / 100) * 0.9;
+
+  document.getElementById("estimate").innerHTML =
+    "Estimated Size: " + format(estimated);
 }
 
-function updateCompression(){
-  const percent = document.getElementById("compSlider").value;
-  document.getElementById("compValue").innerText = percent + "%";
+// main compress
+async function compress(){
+  const file = document.getElementById("file").files[0];
+  if(!file){ alert("Select PDF"); return; }
 
-  if(originalPDFSize){
-    const est = Math.floor(originalPDFSize * (percent/100));
-    document.getElementById("pdfNewSize").innerHTML =
-      "Estimated Size: <b>" + formatBytes(est) + "</b>";
-  }
-}
+  const percent = document.getElementById("slider").value;
+  const quality = percent / 100;
 
-async function compressPDF(){
-  const f = document.getElementById("compressFile").files[0];
-  if(!f){ alert("Select PDF first"); return; }
-
-  const outDiv = document.getElementById("output_compress");
-  outDiv.innerHTML = "Compressing (High Quality)...";
+  document.getElementById("output").innerText = "Processing...";
 
   try{
-    const pdfDoc = await pdfjsLib.getDocument(URL.createObjectURL(f)).promise;
+    const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
     const { jsPDF } = window.jspdf;
 
-    const newPdf = new jsPDF({
-      unit:"pt",
-      compress:true
-    });
+    const newPdf = new jsPDF();
 
-    let first = true;
+    for(let i=1;i<=pdf.numPages;i++){
+      const page = await pdf.getPage(i);
 
-    for(let p=1; p<=pdfDoc.numPages; p++){
-      const page = await pdfDoc.getPage(p);
-
-      /* 🔥 HIGH SCALE = NO BLUR */
-      const scale = 2.8;
-      const viewport = page.getViewport({ scale });
+      const viewport = page.getViewport({ scale: 2 });
 
       const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      await page.render({
-        canvasContext: canvas.getContext("2d"),
-        viewport
-      }).promise;
+      await page.render({canvasContext:ctx, viewport}).promise;
 
-      /* 🔥 PNG = TEXT SHARP */
-      const imgData = canvas.toDataURL("image/png");
+      let img;
 
-      const pdfW = newPdf.internal.pageSize.getWidth();
-      const pdfH = (canvas.height * pdfW) / canvas.width;
+      if(quality >= 0.8){
+        img = canvas.toDataURL("image/png");
+      }else{
+        img = canvas.toDataURL("image/jpeg", quality);
+      }
 
-      if(!first) newPdf.addPage();
-      newPdf.addImage(imgData,"PNG",0,0,pdfW,pdfH);
-      first = false;
+      const w = newPdf.internal.pageSize.getWidth();
+      const h = (canvas.height * w) / canvas.width;
+
+      if(i>1) newPdf.addPage();
+      newPdf.addImage(img,"JPEG",0,0,w,h);
     }
 
     const blob = newPdf.output("blob");
     const url = URL.createObjectURL(blob);
 
-    outDiv.innerHTML = "";
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "compressed.pdf";
-    a.textContent = "Download compressed PDF";
-    outDiv.appendChild(a);
+    document.getElementById("output").innerHTML =
+      `<a href="${url}" download="compressed.pdf">Download PDF</a>`;
 
-    document.getElementById("pdfNewSize").innerHTML =
-      "Final Size: <b>" + formatBytes(blob.size) + "</b>";
+    document.getElementById("newsize").innerHTML =
+      "Final Size: " + format(blob.size);
 
   }catch(e){
     console.error(e);
-    alert("Compression failed");
-    outDiv.innerHTML = "";
+    alert("Error processing PDF");
   }
 }
 
-function formatBytes(bytes){
-  const k = 1024;
-  const sizes = ["Bytes","KB","MB","GB"];
-  const i = Math.floor(Math.log(bytes)/Math.log(k));
-  return (bytes/Math.pow(k,i)).toFixed(2) + " " + sizes[i];
+// format
+function format(bytes){
+  let k=1024;
+  let sizes=["Bytes","KB","MB"];
+  let i=Math.floor(Math.log(bytes)/Math.log(k));
+  return (bytes/Math.pow(k,i)).toFixed(2)+" "+sizes[i];
 }
 </script>
 
